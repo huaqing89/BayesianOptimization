@@ -9,6 +9,7 @@ from .util import UtilityFunction, acq_max, ensure_rng
 from sklearn.gaussian_process.kernels import Matern
 from sklearn.gaussian_process import GaussianProcessRegressor
 
+from tqdm import tqdm
 
 class Queue:
     def __init__(self):
@@ -157,21 +158,35 @@ class BayesianOptimization(Observable):
                  xi=0.0,
                  **gp_params):
         """Mazimize your function"""
-        self._prime_subscriptions()
+        if self._verbose != -1:
+            self._prime_subscriptions()
         self.dispatch(Events.OPTMIZATION_START)
         self._prime_queue(init_points)
         self.set_gp_params(**gp_params)
 
         util = UtilityFunction(kind=acq, kappa=kappa, xi=xi)
         iteration = 0
-        while not self._queue.empty or iteration < n_iter:
-            try:
-                x_probe = next(self._queue)
-            except StopIteration:
-                x_probe = self.suggest(util)
-                iteration += 1
+        if self._verbose == -1:
+            with tqdm(total=n_iter) as pbar:
+                while not self._queue.empty or iteration < n_iter:
+                    try:
+                        x_probe = next(self._queue)
+                    except StopIteration:
+                        x_probe = self.suggest(util)
+                        iteration += 1
+                        pbar.update(1)
 
-            self.probe(x_probe, lazy=False)
+                    self.probe(x_probe, lazy=False)
+
+        else:
+            while not self._queue.empty or iteration < n_iter:
+                try:
+                    x_probe = next(self._queue)
+                except StopIteration:
+                    x_probe = self.suggest(util)
+                    iteration += 1
+
+                self.probe(x_probe, lazy=False)
 
         self.dispatch(Events.OPTMIZATION_END)
 
